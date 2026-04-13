@@ -4,9 +4,10 @@ import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
-  base: '/Character-Height/',
   const env = loadEnv(mode, '.', '');
+
   return {
+    base: '/Character-Height/', // <--- 이쪽으로 이사를 와야 합니다!
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
