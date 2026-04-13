@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "Character": {
+      "title": "Character",
+      "description": "Character information for height comparison",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "height": { "type": "number" },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "description": { "type": "string" },
+        "notionUrl": { "type": "string" },
+        "color": { "type": "string" },
+        "series": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "height", "gender", "color"]
+    }
+  },
+  "firestore": {
+    "/characters/{characterId}": {
+      "schema": "Character",
+      "description": "Global collection of characters"
+    }
+  }
+}

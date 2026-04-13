@@ -53,11 +53,7 @@ export default function CharacterList({ characters, onEdit, onDelete }: Props) {
               <Edit2 size={16} />
             </button>
             <button 
-              onClick={() => {
-                if (window.confirm(`${char.name} 인물을 삭제하시겠습니까?`)) {
-                  onDelete(char.id);
-                }
-              }}
+              onClick={() => onDelete(char.id)}
               className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
               title="삭제"
             >

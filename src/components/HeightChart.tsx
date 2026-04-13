@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Character } from '../types';
 import { ExternalLink } from 'lucide-react';
+import CharacterDetailDrawer from './CharacterDetailDrawer';
 
 interface Props {
   characters: Character[];
@@ -11,6 +12,7 @@ type SortOption = 'added' | 'height' | 'gender' | 'name';
 export default function HeightChart({ characters }: Props) {
   const [sortBy, setSortBy] = useState<SortOption>('added');
   const [filterSeries, setFilterSeries] = useState<string>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (characters.length === 0) {
     return (
@@ -19,6 +21,13 @@ export default function HeightChart({ characters }: Props) {
       </div>
     );
   }
+
+  // Handle background click to deselect
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      setSelectedId(null);
+    }
+  };
 
   const uniqueSeries = Array.from(new Set(characters.map(c => c.series).filter(Boolean) as string[]));
 
@@ -102,11 +111,15 @@ export default function HeightChart({ characters }: Props) {
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto pb-12 pt-12 px-4 flex-grow">
+      <div 
+        className="w-full overflow-x-auto pb-12 pt-12 px-4 flex-grow"
+        onClick={handleBackgroundClick}
+      >
         <div 
           className="relative min-w-max flex items-end space-x-12 px-12 border-b-2 border-gray-400 mx-auto"
-        style={{ height: `${containerHeight}px` }}
-      >
+          onClick={handleBackgroundClick}
+          style={{ height: `${containerHeight}px` }}
+        >
         
         {/* Grid Lines */}
         <div className="absolute inset-0 pointer-events-none z-0">
@@ -127,67 +140,52 @@ export default function HeightChart({ characters }: Props) {
         {/* Characters */}
         {sortedCharacters.map(char => {
           const heightPx = char.height * PIXELS_PER_CM;
+          const isSelected = selectedId === char.id;
           
-          const CharacterBody = (
-            <div className="flex flex-col items-center justify-end group relative cursor-pointer z-10 transition-transform hover:-translate-y-1">
-              
-              {/* Tooltip */}
-              <div className="absolute bottom-full mb-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 p-4 bg-gray-900 text-white text-sm rounded-xl shadow-2xl z-50 left-1/2 -translate-x-1/2">
-                <div className="font-bold text-lg mb-1 flex items-center justify-between">
-                  <span>{char.name}</span>
-                  <span className="text-gray-300 text-sm font-normal bg-gray-800 px-2 py-1 rounded-md">{char.height}cm</span>
-                </div>
-                {char.description ? (
-                  <p className="text-gray-300 text-sm leading-relaxed border-t border-gray-700 pt-3 mt-2">
-                    {char.description}
-                  </p>
-                ) : (
-                  <p className="text-gray-500 text-sm italic border-t border-gray-700 pt-3 mt-2">묘사가 없습니다.</p>
-                )}
-                {char.notionUrl && (
-                  <p className="text-blue-400 text-xs mt-3 flex items-center font-medium">
-                    클릭하여 노션 페이지 열기 →
-                  </p>
-                )}
-                {/* Tooltip Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"></div>
-              </div>
-
+          return (
+            <div 
+              key={char.id}
+              className={`flex flex-col items-center justify-end group relative cursor-pointer z-10 transition-all ${isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedId(char.id);
+              }}
+            >
               {/* Height Label above head */}
-              <span className="text-sm font-bold text-gray-600 mb-2 bg-white/80 px-1 rounded">{char.height}</span>
+              <span className={`text-sm font-bold mb-2 bg-white/80 px-1 rounded transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-600'}`}>{char.height}</span>
 
               {/* Figure */}
               <div className="flex flex-col items-center justify-end" style={{ height: `${heightPx}px` }}>
                 {/* Head */}
                 <div 
-                  className="rounded-full flex-shrink-0 shadow-sm relative z-10"
+                  className={`rounded-full flex-shrink-0 shadow-sm relative z-10 transition-all ${isSelected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}
                   style={{ 
                     width: char.gender === 'male' ? '32px' : '28px', 
                     height: char.gender === 'male' ? '32px' : '28px', 
                     backgroundColor: char.color,
-                    opacity: 0.8
+                    opacity: isSelected ? 1 : 0.8
                   }}
                 />
                 
                 {/* Body */}
                 <div 
-                  className="flex-grow shadow-sm relative mt-1"
+                  className="flex-grow shadow-sm relative mt-1 transition-all"
                   style={{ 
                     backgroundColor: char.color, 
                     width: char.gender === 'male' ? '54px' : '46px',
                     clipPath: char.gender === 'male' 
                       ? 'polygon(0 0, 100% 0, 80% 100%, 20% 100%)' // Broad shoulders, narrow waist
                       : 'polygon(25% 0, 75% 0, 100% 100%, 0 100%)', // Narrow shoulders, wide hips/skirt
-                    opacity: 0.8
+                    opacity: isSelected ? 1 : 0.8
                   }}
                 />
               </div>
 
               {/* Name Label below */}
               <div className="absolute top-full mt-3 text-center w-32 left-1/2 -translate-x-1/2">
-                <p className="font-semibold text-gray-800 truncate flex items-center justify-center gap-1">
+                <p className={`font-semibold truncate flex items-center justify-center gap-1 transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-800'}`}>
                   {char.name}
-                  {char.notionUrl && <ExternalLink size={12} className="text-blue-500 flex-shrink-0" />}
+                  {char.notionUrl && <ExternalLink size={12} className={isSelected ? 'text-blue-600' : 'text-blue-500'} />}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {char.gender === 'male' ? '남성' : '여성'}
@@ -196,25 +194,15 @@ export default function HeightChart({ characters }: Props) {
               </div>
             </div>
           );
-
-          if (char.notionUrl) {
-            return (
-              <a 
-                key={char.id} 
-                href={char.notionUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="block relative z-10"
-              >
-                {CharacterBody}
-              </a>
-            );
-          }
-
-          return <div key={char.id} className="relative z-10">{CharacterBody}</div>;
         })}
       </div>
       </div>
+
+      {/* Character Detail Drawer */}
+      <CharacterDetailDrawer 
+        character={characters.find(c => c.id === selectedId) || null}
+        onClose={() => setSelectedId(null)}
+      />
     </div>
   );
 }
