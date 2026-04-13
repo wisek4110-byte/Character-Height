@@ -40,16 +40,19 @@ export default function HeightChart({ characters }: Props) {
   const minHeight = Math.min(...filteredCharacters.map(c => c.height), 150);
   const maxHeight = Math.max(...filteredCharacters.map(c => c.height), 180);
   
-  const startGrid = Math.floor((minHeight - 20) / 10) * 10;
-  const endGrid = Math.ceil((maxHeight + 20) / 10) * 10;
+  const startGrid = Math.floor((minHeight - 10) / 10) * 10;
+  const endGrid = Math.ceil(maxHeight / 10) * 10;
   
   const gridLines = [];
   for (let h = startGrid; h <= endGrid; h += 10) {
-    gridLines.push(h);
+    // Only add grid lines that fit within the container
+    if (h * PIXELS_PER_CM <= maxHeight * PIXELS_PER_CM + 34) {
+      gridLines.push(h);
+    }
   }
 
-  // Calculate container height to ensure tallest character fits
-  const containerHeight = endGrid * PIXELS_PER_CM + 250; // +250 for labels and tooltip space
+  // 가장 큰 캐릭터의 픽셀 높이 + 머리 위 라벨 공간(약 28px) + 여백 6px = 34px
+  const containerHeight = maxHeight * PIXELS_PER_CM + 34;
 
   return (
     <div className="w-full flex flex-col h-full">
@@ -99,7 +102,7 @@ export default function HeightChart({ characters }: Props) {
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto pb-12 pt-32 px-4 flex-grow">
+      <div className="w-full overflow-x-auto pb-12 pt-12 px-4 flex-grow">
         <div 
           className="relative min-w-max flex items-end space-x-12 px-12 border-b-2 border-gray-400 mx-auto"
         style={{ height: `${containerHeight}px` }}
