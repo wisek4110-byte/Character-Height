@@ -48,7 +48,7 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
     if (!formData.name || !formData.height) return;
 
     onSave({
-      id: editingCharacter ? editingCharacter.id : crypto.randomUUID(),
+      id: editingCharacter ? editingCharacter.id : (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
       name: formData.name,
       height: Number(formData.height),
       gender: formData.gender as 'male' | 'female',

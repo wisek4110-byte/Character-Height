@@ -145,10 +145,18 @@ export default function HeightChart({ characters }: Props) {
           return (
             <div 
               key={char.id}
-              className={`flex flex-col items-center justify-end group relative cursor-pointer z-10 transition-all ${isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'}`}
+              role="button"
+              tabIndex={0}
+              className={`flex flex-col items-center justify-end group relative cursor-pointer z-10 transition-all outline-none ${isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedId(char.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelectedId(char.id);
+                }
               }}
             >
               {/* Height Label above head */}
