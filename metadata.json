@@ -1,0 +1,5 @@
+{
+  "name": "Character Height Comparator",
+  "description": "A tool to compare character heights with gender body types, descriptions, and Notion links.",
+  "requestFramePermissions": []
+}
