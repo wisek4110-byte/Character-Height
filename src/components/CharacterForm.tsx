@@ -34,7 +34,7 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
         series: lastSeries,
       });
     }
-  }, [editingCharacter, lastSeries]);
+  }, [editingCharacter]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -50,9 +50,6 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
         ...prev,
         [name]: value
       }));
-      if (name === 'series') {
-        setLastSeries(value);
-      }
     }
   };
 
