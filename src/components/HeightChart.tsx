@@ -171,7 +171,7 @@ export default function HeightChart({ characters }: Props) {
                     width: char.gender === 'male' ? '32px' : '28px', 
                     height: char.gender === 'male' ? '32px' : '28px', 
                     backgroundColor: char.color,
-                    opacity: isSelected ? 1 : 0.8
+                    opacity: isSelected ? 1 : 0.6
                   }}
                 />
                 
@@ -184,7 +184,7 @@ export default function HeightChart({ characters }: Props) {
                     clipPath: char.gender === 'male' 
                       ? 'polygon(0 0, 100% 0, 80% 100%, 20% 100%)' // Broad shoulders, narrow waist
                       : 'polygon(25% 0, 75% 0, 100% 100%, 0 100%)', // Narrow shoulders, wide hips/skirt
-                    opacity: isSelected ? 1 : 0.8
+                    opacity: isSelected ? 1 : 0.6
                   }}
                 />
               </div>
