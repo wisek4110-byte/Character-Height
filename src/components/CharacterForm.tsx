@@ -9,6 +9,7 @@ interface Props {
 }
 
 export default function CharacterForm({ onSave, editingCharacter, onCancel }: Props) {
+  const [lastSeries, setLastSeries] = useState('');
   const [formData, setFormData] = useState<Partial<Character>>({
     name: '',
     height: 170,
@@ -30,10 +31,10 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
         description: '',
         notionUrl: '',
         color: getRandomColor(),
-        series: '',
+        series: lastSeries,
       });
     }
-  }, [editingCharacter]);
+  }, [editingCharacter, lastSeries]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -49,12 +50,18 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
         ...prev,
         [name]: value
       }));
+      if (name === 'series') {
+        setLastSeries(value);
+      }
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || formData.height === '' || formData.height === undefined) return;
+
+    const seriesValue = formData.series || '';
+    setLastSeries(seriesValue);
 
     onSave({
       id: editingCharacter ? editingCharacter.id : (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
@@ -64,7 +71,7 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
       description: formData.description || '',
       notionUrl: formData.notionUrl || '',
       color: formData.color || getRandomColor(),
-      series: formData.series || '',
+      series: seriesValue,
     });
 
     if (!editingCharacter) {
@@ -75,7 +82,7 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
         description: '',
         notionUrl: '',
         color: getRandomColor(),
-        series: '',
+        series: seriesValue,
       });
     }
   };
