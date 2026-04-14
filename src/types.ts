@@ -7,4 +7,6 @@ export interface Character {
   notionUrl: string;
   color: string;
   series?: string;
+  order?: number;
+  projectId?: string;
 }
