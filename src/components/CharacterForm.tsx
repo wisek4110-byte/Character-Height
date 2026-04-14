@@ -37,15 +37,24 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'height' ? Number(value) : value
-    }));
+    
+    if (name === 'height') {
+      // Allow empty string for better input experience (backspacing)
+      setFormData(prev => ({
+        ...prev,
+        [name]: value === '' ? '' : Number(value)
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.height) return;
+    if (!formData.name || formData.height === '' || formData.height === undefined) return;
 
     onSave({
       id: editingCharacter ? editingCharacter.id : (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
