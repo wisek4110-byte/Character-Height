@@ -14,7 +14,8 @@ import {
   query, 
   orderBy,
   getDocs,
-  writeBatch
+  writeBatch,
+  where
 } from 'firebase/firestore';
 
 export default function App() {
@@ -24,14 +25,29 @@ export default function App() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
 
+  // Get project ID from URL (e.g., ?id=story1)
+  const [projectId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('id') || 'default';
+  });
+
   // 1. Real-time synchronization from Firestore
   useEffect(() => {
-    const q = query(collection(db, 'characters'), orderBy('id'));
+    // Filter by projectId to allow multiple separate stories
+    const q = query(
+      collection(db, 'characters'), 
+      where('projectId', '==', projectId)
+    );
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const chars: Character[] = [];
       snapshot.forEach((doc) => {
         chars.push(doc.data() as Character);
       });
+      
+      // Sort by order if available, otherwise by id
+      chars.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
+      
       setCharacters(chars);
       setIsLoading(false);
     }, (error) => {
@@ -40,7 +56,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [projectId]);
 
   // 2. Migration: One-time migration from localStorage to Firestore
   useEffect(() => {
@@ -50,13 +66,17 @@ export default function App() {
         try {
           const localChars: Character[] = JSON.parse(saved);
           if (localChars.length > 0) {
-            // Check if Firestore is empty before migrating
-            const snapshot = await getDocs(collection(db, 'characters'));
+            // Check if Firestore is empty for this project before migrating
+            const snapshot = await getDocs(query(collection(db, 'characters'), where('projectId', '==', projectId)));
             if (snapshot.empty) {
               const batch = writeBatch(db);
-              localChars.forEach((char) => {
+              localChars.forEach((char, index) => {
                 const docRef = doc(db, 'characters', char.id);
-                batch.set(docRef, char);
+                batch.set(docRef, { 
+                  ...char, 
+                  projectId, 
+                  order: index 
+                });
               });
               await batch.commit();
               console.log("Data migrated to Firestore");
@@ -73,11 +93,17 @@ export default function App() {
     if (!isLoading) {
       migrateData();
     }
-  }, [isLoading]);
+  }, [isLoading, projectId]);
 
   const handleSave = async (character: Character) => {
     try {
-      await setDoc(doc(db, 'characters', character.id), character);
+      // Ensure projectId and order are set
+      const charData = {
+        ...character,
+        projectId,
+        order: character.order ?? characters.length
+      };
+      await setDoc(doc(db, 'characters', character.id), charData);
       setEditingCharacter(null);
     } catch (error) {
       console.error("Error saving character:", error);
