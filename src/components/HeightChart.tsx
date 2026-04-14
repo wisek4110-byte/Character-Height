@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { Character } from '../types';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, MoveHorizontal } from 'lucide-react';
 import CharacterDetailDrawer from './CharacterDetailDrawer';
+import { motion, Reorder } from 'motion/react';
+import { db } from '../firebase';
+import { doc, writeBatch } from 'firebase/firestore';
 
 interface Props {
   characters: Character[];
 }
 
-type SortOption = 'added' | 'height' | 'gender' | 'name';
+type SortOption = 'custom' | 'height' | 'gender' | 'name';
 
 export default function HeightChart({ characters }: Props) {
-  const [sortBy, setSortBy] = useState<SortOption>('added');
+  const [sortBy, setSortBy] = useState<SortOption>('custom');
   const [filterSeries, setFilterSeries] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -41,8 +44,28 @@ export default function HeightChart({ characters }: Props) {
     if (sortBy === 'height') return a.height - b.height;
     if (sortBy === 'gender') return a.gender.localeCompare(b.gender);
     if (sortBy === 'name') return a.name.localeCompare(b.name);
-    return 0;
+    // Default to 'custom' order
+    return (a.order ?? 0) - (b.order ?? 0);
   });
+
+  const handleReorder = async (newOrder: Character[]) => {
+    if (sortBy !== 'custom') return;
+    
+    // Update local state immediately for smooth UI
+    // (Though App.tsx will eventually update it from Firestore)
+    
+    try {
+      const batch = writeBatch(db);
+      newOrder.forEach((char, index) => {
+        const docRef = doc(db, 'characters', char.id);
+        batch.update(docRef, { order: index });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error("Error updating order:", error);
+    }
+  };
+
   const PIXELS_PER_CM = 2.5;
   
   // Determine grid lines dynamically based on min/max height
@@ -85,10 +108,11 @@ export default function HeightChart({ characters }: Props) {
         <div className="flex items-center space-x-2">
           <span className="text-sm text-gray-500 mr-1">정렬:</span>
           <button 
-            onClick={() => setSortBy('added')}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${sortBy === 'added' ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            onClick={() => setSortBy('custom')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors flex items-center gap-1 ${sortBy === 'custom' ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
-            추가순
+            <MoveHorizontal size={12} />
+            사용자 지정
           </button>
           <button 
             onClick={() => setSortBy('height')}
@@ -115,7 +139,10 @@ export default function HeightChart({ characters }: Props) {
         className="w-full overflow-x-auto pb-12 pt-12 px-4 flex-grow"
         onClick={handleBackgroundClick}
       >
-        <div 
+        <Reorder.Group 
+          axis="x"
+          values={sortedCharacters}
+          onReorder={handleReorder}
           className="relative min-w-max flex items-end space-x-12 px-12 border-b-2 border-gray-400 mx-auto"
           onClick={handleBackgroundClick}
           style={{ height: `${containerHeight}px` }}
@@ -143,11 +170,13 @@ export default function HeightChart({ characters }: Props) {
           const isSelected = selectedId === char.id;
           
           return (
-            <div 
+            <Reorder.Item 
               key={char.id}
+              value={char}
+              dragListener={sortBy === 'custom'}
               role="button"
               tabIndex={0}
-              className={`flex flex-col items-center justify-end group relative cursor-pointer z-10 transition-all outline-none ${isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'}`}
+              className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing z-10 transition-all outline-none ${isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedId(char.id);
@@ -163,7 +192,7 @@ export default function HeightChart({ characters }: Props) {
               <span className={`text-sm font-bold mb-2 bg-white/80 px-1 rounded transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-600'}`}>{char.height}</span>
 
               {/* Figure */}
-              <div className="flex flex-col items-center justify-end" style={{ height: `${heightPx}px` }}>
+              <div className="flex flex-col items-center justify-end pointer-events-none" style={{ height: `${heightPx}px` }}>
                 {/* Head */}
                 <div 
                   className={`rounded-full flex-shrink-0 shadow-sm relative z-10 transition-all ${isSelected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}
@@ -190,7 +219,7 @@ export default function HeightChart({ characters }: Props) {
               </div>
 
               {/* Name Label below */}
-              <div className="absolute top-full mt-3 text-center w-32 left-1/2 -translate-x-1/2">
+              <div className="absolute top-full mt-3 text-center w-32 left-1/2 -translate-x-1/2 pointer-events-none">
                 <p className={`font-semibold truncate flex items-center justify-center gap-1 transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-800'}`}>
                   {char.name}
                   {char.notionUrl && <ExternalLink size={12} className={isSelected ? 'text-blue-600' : 'text-blue-500'} />}
@@ -200,10 +229,10 @@ export default function HeightChart({ characters }: Props) {
                   {char.series && <span className="block text-[10px] text-gray-400 truncate mt-0.5">{char.series}</span>}
                 </p>
               </div>
-            </div>
+            </Reorder.Item>
           );
         })}
-      </div>
+        </Reorder.Group>
       </div>
 
       {/* Character Detail Drawer */}
