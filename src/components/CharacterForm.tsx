@@ -61,6 +61,7 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
     setLastSeries(seriesValue);
 
     onSave({
+      ...(editingCharacter || {}),
       id: editingCharacter ? editingCharacter.id : (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
       name: formData.name,
       height: Number(formData.height),
@@ -69,7 +70,7 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
       notionUrl: formData.notionUrl || '',
       color: formData.color || getRandomColor(),
       series: seriesValue,
-    });
+    } as Character);
 
     if (!editingCharacter) {
       setFormData({
@@ -84,8 +85,14 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      handleSubmit(e as unknown as React.FormEvent);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
@@ -128,19 +135,19 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">체형 (성별)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
           <select 
             name="gender" 
             value={formData.gender} 
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="male">남성형</option>
-            <option value="female">여성형</option>
+            <option value="male">남성</option>
+            <option value="female">여성</option>
           </select>
         </div>
       </div>
-
+      
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">키 묘사 / 설명</label>
         <textarea 
