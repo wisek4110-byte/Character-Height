@@ -1,21 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Character } from '../types';
 import { ExternalLink, MoveHorizontal } from 'lucide-react';
 import CharacterDetailDrawer from './CharacterDetailDrawer';
 import { motion, Reorder } from 'motion/react';
 import { db } from '../firebase';
 import { doc, writeBatch } from 'firebase/firestore';
+import ObjectVisual from './ObjectVisual';
 
 interface Props {
   characters: Character[];
+  onUpdate?: (character: Character) => void;
 }
 
 type SortOption = 'custom' | 'height' | 'gender' | 'name';
 
-export default function HeightChart({ characters }: Props) {
+const PIXELS_PER_CM = 3.0; // Slightly reduced to fit better vertically
+
+interface DraggableObjectProps {
+  obj: Character;
+  index: number;
+  characterCount: number;
+  latestCharacterHeight: number;
+  chartAreaRef: React.RefObject<HTMLDivElement>;
+}
+
+const DraggableObject: React.FC<DraggableObjectProps> = ({ obj, index, characterCount, latestCharacterHeight, chartAreaRef }) => {
+  const heightPx = obj.height * PIXELS_PER_CM;
+  const widthPx = (obj.width || 50) * PIXELS_PER_CM;
+  
+  // Calculate starting X position to overlap behind the last character
+  // Container has px-32 (128px). Characters have ~72px width and space-x-20 (80px).
+  const charIndex = Math.max(0, characterCount - 1);
+  const approximateCharCenter = 128 + (charIndex * 152) + 36;
+  const startXPx = (obj.id === 'obj-car' || obj.id === 'obj-chalkboard') 
+    ? 32 + (index * 40) // Align to left edge for wide objects, with slight offset per object
+    : approximateCharCenter - (widthPx / 2) + (index * 20);
+  
+  // Special case for bed: free dragging (horizontal and vertical)
+  const isBed = obj.id === 'obj-bed';
+  
+  let bottomPx = (obj.yOffset || 0) * PIXELS_PER_CM + 60; // Offset by ground position (60px)
+  
+  if (isBed) {
+    // Top of bed (pillow) should align with character's head
+    // Height of bed top from bottom is obj.height
+    // Character head from ground is latestCharacterHeight
+    bottomPx = (latestCharacterHeight - obj.height) * PIXELS_PER_CM + 60;
+  }
+
+  return (
+    <motion.div
+      drag={isBed ? true : "x"}
+      dragConstraints={chartAreaRef}
+      dragElastic={0.05}
+      dragMomentum={true}
+      onContextMenu={(e) => e.preventDefault()}
+      className="absolute cursor-grab active:cursor-grabbing pointer-events-auto z-10"
+      style={{ left: `${startXPx}px`, bottom: `${bottomPx}px`, touchAction: 'none' }}
+    >
+      <div className="flex flex-col items-center group relative">
+        <ObjectVisual 
+          id={obj.id} 
+          width={widthPx} 
+          height={heightPx} 
+          color={obj.color} 
+          name={obj.name}
+        />
+      </div>
+    </motion.div>
+  );
+};
+
+export default function HeightChart({ characters, onUpdate }: Props) {
   const [sortBy, setSortBy] = useState<SortOption>('custom');
   const [filterSeries, setFilterSeries] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
 
   if (characters.length === 0) {
     return (
@@ -25,7 +85,6 @@ export default function HeightChart({ characters }: Props) {
     );
   }
 
-  // Handle background click to deselect
   const handleBackgroundClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       setSelectedId(null);
@@ -34,7 +93,10 @@ export default function HeightChart({ characters }: Props) {
 
   const uniqueSeries = Array.from(new Set(characters.map(c => c.series).filter(Boolean) as string[]));
 
-  const filteredCharacters = characters.filter(c => {
+  const characterList = characters.filter(c => !c.isObject);
+  const objectList = characters.filter(c => c.isObject);
+
+  const filteredCharacters = characterList.filter(c => {
     if (filterSeries === 'all') return true;
     if (filterSeries === 'none') return !c.series;
     return c.series === filterSeries;
@@ -42,18 +104,13 @@ export default function HeightChart({ characters }: Props) {
 
   const sortedCharacters = [...filteredCharacters].sort((a, b) => {
     if (sortBy === 'height') return a.height - b.height;
-    if (sortBy === 'gender') return a.gender.localeCompare(b.gender);
+    if (sortBy === 'gender') return a.gender === b.gender ? 0 : a.gender === 'male' ? -1 : 1;
     if (sortBy === 'name') return a.name.localeCompare(b.name);
-    // Default to 'custom' order
     return (a.order ?? 0) - (b.order ?? 0);
   });
 
   const handleReorder = async (newOrder: Character[]) => {
     if (sortBy !== 'custom') return;
-    
-    // Update local state immediately for smooth UI
-    // (Though App.tsx will eventually update it from Firestore)
-    
     try {
       const batch = writeBatch(db);
       newOrder.forEach((char, index) => {
@@ -66,179 +123,165 @@ export default function HeightChart({ characters }: Props) {
     }
   };
 
-  const PIXELS_PER_CM = 2.5;
+  const allEntities = [...sortedCharacters, ...objectList];
+  const maxHeight = allEntities.length > 0 
+    ? Math.max(...allEntities.map(c => (c.height + Math.max(0, c.yOffset || 0))))
+    : 180;
+  const minHeight = allEntities.length > 0
+    ? Math.min(...allEntities.map(c => c.height + Math.max(0, c.yOffset || 0)))
+    : 0;
   
-  // Determine grid lines dynamically based on min/max height
-  const minHeight = Math.min(...filteredCharacters.map(c => c.height), 150);
-  const maxHeight = Math.max(...filteredCharacters.map(c => c.height), 180);
-  
-  const startGrid = Math.floor((minHeight - 10) / 10) * 10;
-  const endGrid = Math.ceil(maxHeight / 10) * 10;
+  // Dynamic width calculation to avoid unnecessary scrolling
+  const characterCount = sortedCharacters.length;
+  const objectCount = objectList.length;
+  const contentWidth = Math.max(characterCount * 160 + objectCount * 300 + 100, 600);
+
+  const startGrid = 0;
+  const endGrid = Math.ceil((maxHeight + 20) / 10) * 10;
   
   const gridLines = [];
   for (let h = startGrid; h <= endGrid; h += 10) {
-    // Only add grid lines that fit within the container
-    if (h * PIXELS_PER_CM <= maxHeight * PIXELS_PER_CM + 34) {
-      gridLines.push(h);
-    }
+    gridLines.push(h);
   }
 
-  // 가장 큰 캐릭터의 픽셀 높이 + 머리 위 라벨 공간(약 28px) + 여백 6px = 34px
-  const containerHeight = maxHeight * PIXELS_PER_CM + 34;
+  // Adjust container height to be more dynamic
+  const groundOffset = 60; // Space for names at the bottom
+  const containerHeight = maxHeight * PIXELS_PER_CM + groundOffset + 100;
 
   return (
-    <div className="w-full flex flex-col h-full">
-      {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-4">
+    <div className="w-full flex flex-col h-full relative">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-4 z-20">
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500">시리즈:</span>
+          <span className="text-sm text-gray-500 font-bold">시리즈 필터:</span>
           <select 
             value={filterSeries} 
             onChange={(e) => setFilterSeries(e.target.value)}
-            className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="text-sm border border-gray-100 bg-white shadow-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
           >
-            <option value="all">전체 보기</option>
+            <option value="all">전체 캐릭터</option>
             {uniqueSeries.map(series => (
               <option key={series} value={series}>{series}</option>
             ))}
-            <option value="none">시리즈 없음</option>
+            <option value="none">기타 (없음)</option>
           </select>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500 mr-1">정렬:</span>
-          <button 
-            onClick={() => setSortBy('custom')}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors flex items-center gap-1 ${sortBy === 'custom' ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            <MoveHorizontal size={12} />
-            사용자 지정
-          </button>
-          <button 
-            onClick={() => setSortBy('height')}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${sortBy === 'height' ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            키
-          </button>
-          <button 
-            onClick={() => setSortBy('gender')}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${sortBy === 'gender' ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            성별
-          </button>
-          <button 
-            onClick={() => setSortBy('name')}
-            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${sortBy === 'name' ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            이름
-          </button>
+        <div className="flex items-center space-x-1 bg-gray-100/50 p-1 rounded-xl border border-gray-100">
+          <button onClick={() => setSortBy('custom')} className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 ${sortBy === 'custom' ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}><MoveHorizontal size={14} />직접 정렬</button>
+          <button onClick={() => setSortBy('height')} className={`px-3 py-1.5 text-xs rounded-lg transition-all ${sortBy === 'height' ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>키 오름차순</button>
+          <button onClick={() => setSortBy('gender')} className={`px-3 py-1.5 text-xs rounded-lg transition-all ${sortBy === 'gender' ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>성별 기준</button>
+          <button onClick={() => setSortBy('name')} className={`px-3 py-1.5 text-xs rounded-lg transition-all ${sortBy === 'name' ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}>이름 오름차순</button>
         </div>
       </div>
 
-      <div 
-        className="w-full overflow-x-auto pb-12 pt-12 px-4 flex-grow"
-        onClick={handleBackgroundClick}
-      >
-        <Reorder.Group 
-          axis="x"
-          values={sortedCharacters}
-          onReorder={handleReorder}
-          className="relative min-w-max flex items-end space-x-12 px-12 border-b-2 border-gray-400 mx-auto"
-          onClick={handleBackgroundClick}
-          style={{ height: `${containerHeight}px` }}
+      <div className="w-full overflow-x-auto flex-grow relative bg-slate-50/10 custom-scrollbar" onClick={handleBackgroundClick}>
+        <div 
+          className="relative min-h-full" 
+          style={{ 
+            height: `${containerHeight}px`, 
+            minWidth: `${contentWidth}px`,
+            transition: 'height 0.5s ease-out, min-width 0.5s ease-out'
+          }}
+          ref={chartAreaRef}
         >
-        
-        {/* Grid Lines */}
-        <div className="absolute inset-0 pointer-events-none z-0">
-          {gridLines.map(h => {
-            const bottomPos = h * PIXELS_PER_CM;
-            return (
-              <div 
-                key={h} 
-                className="absolute w-full border-t border-dashed border-gray-200 flex items-center"
-                style={{ bottom: `${bottomPos}px` }}
-              >
-                <span className="text-xs text-gray-400 bg-white pr-2 -mt-3 absolute left-0">{h}cm</span>
-              </div>
-            );
-          })}
+          {/* Grid Lines Layer */}
+          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+            <div className="relative w-full h-full">
+              {gridLines.map(h => (
+                <div key={h} className="absolute w-full border-t border-gray-200/40 flex items-center transition-all duration-700 ease-in-out" style={{ bottom: `${h * PIXELS_PER_CM + groundOffset}px` }}>
+                  <span className="text-[10px] font-bold text-gray-300 bg-white/30 px-2 py-0.5 rounded-r -mt-4 absolute left-0 z-10">{h}cm</span>
+                </div>
+              ))}
+            </div>
+            {/* Ground Line */}
+            <div className="absolute bottom-[56px] w-full border-b-[4px] border-slate-300 z-10" />
+            <div className="absolute bottom-0 w-full h-[56px] bg-gray-50/50" />
+          </div>
+
+          {/* Draggable Objects Layer (Behind) */}
+          <div className="absolute inset-0 z-10">
+             {objectList.map((obj, index) => {
+               // Calculate latest character height for bed positioning
+               const latestChar = sortedCharacters.length > 0 ? sortedCharacters[sortedCharacters.length - 1] : null;
+               const latestCharacterHeight = latestChar ? latestChar.height : 170; // 170 as fallback
+               
+               return (
+                 <DraggableObject 
+                   key={obj.id}
+                   obj={obj}
+                   index={index}
+                   characterCount={characterCount}
+                   latestCharacterHeight={latestCharacterHeight}
+                   chartAreaRef={chartAreaRef}
+                 />
+               );
+             })}
+          </div>
+
+          {/* Characters Layer (Front) */}
+          <Reorder.Group 
+            axis="x"
+            values={sortedCharacters}
+            onReorder={handleReorder}
+            className="flex items-end justify-start space-x-20 px-32 h-full relative z-20 pointer-events-none"
+            style={{ paddingBottom: `${groundOffset}px` }}
+            onClick={handleBackgroundClick}
+          >
+            {sortedCharacters.map(char => {
+              const isSelected = selectedId === char.id;
+              return (
+                <Reorder.Item 
+                  key={char.id}
+                  value={char}
+                  dragListener={sortBy === 'custom'}
+                  className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing outline-none pointer-events-auto ${isSelected ? 'z-30' : 'z-20'}`}
+                  onClick={(e) => { e.stopPropagation(); setSelectedId(char.id); }}
+                >
+                  <div className={`flex flex-col items-center justify-end transition-transform duration-300 origin-bottom ${isSelected ? '-translate-y-2' : 'group-hover:-translate-y-2'}`}>
+                    <span className={`text-[11px] font-black pb-1.5 transition-all ${isSelected ? 'text-blue-600 drop-shadow-md' : 'text-gray-600'}`}>{char.height}</span>
+                    <div className="flex flex-col items-center justify-end pointer-events-none" style={{ height: `${char.height * PIXELS_PER_CM}px` }}>
+                      <div 
+                        className={`rounded-full flex-shrink-0 shadow-lg relative z-10 transition-all ${isSelected ? 'ring-2 ring-blue-500/30' : ''}`}
+                        style={{ 
+                          width: char.gender === 'male' ? '46px' : '42px', 
+                          height: char.gender === 'male' ? '46px' : '42px', 
+                          backgroundColor: char.color,
+                          opacity: isSelected ? 1 : 0.95
+                        }}
+                      />
+                      <div 
+                        className="flex-grow shadow-2xl relative mt-1 transition-all"
+                        style={{ 
+                          backgroundColor: char.color, 
+                          width: char.gender === 'male' ? '72px' : '62px',
+                          clipPath: char.gender === 'male' 
+                            ? 'polygon(0 0, 100% 0, 80% 100%, 20% 100%)' 
+                            : 'polygon(25% 0, 75% 0, 100% 100%, 0 100%)',
+                          opacity: isSelected ? 1 : 0.95
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className={`absolute top-[calc(100%+8px)] text-center w-40 left-1/2 -translate-x-1/2 pointer-events-none p-2 rounded-xl transition-all ${isSelected ? 'bg-white shadow-lg ring-1 ring-blue-50' : 'bg-white/30 backdrop-blur-[1px]'}`}>
+                    <p className={`font-bold truncate text-sm flex items-center justify-center gap-1.5 transition-colors ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
+                      {char.name}
+                      {char.notionUrl && <ExternalLink size={14} className={isSelected ? 'text-blue-600' : 'text-blue-400'} />}
+                    </p>
+                    <p className="text-[10px] font-bold text-gray-400 mt-0.5 uppercase tracking-tighter">
+                      {char.series || (char.gender === 'male' ? 'MALE' : 'FEMALE')}
+                    </p>
+                  </div>
+                </Reorder.Item>
+              );
+            })}
+          </Reorder.Group>
         </div>
-
-        {/* Characters */}
-        {sortedCharacters.map(char => {
-          const heightPx = char.height * PIXELS_PER_CM;
-          const isSelected = selectedId === char.id;
-          
-          return (
-            <Reorder.Item 
-              key={char.id}
-              value={char}
-              dragListener={sortBy === 'custom'}
-              role="button"
-              tabIndex={0}
-              className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing z-10 transition-all outline-none ${isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedId(char.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setSelectedId(char.id);
-                }
-              }}
-            >
-              {/* Height Label above head */}
-              <span className={`text-sm font-bold mb-2 bg-white/80 px-1 rounded transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-600'}`}>{char.height}</span>
-
-              {/* Figure */}
-              <div className="flex flex-col items-center justify-end pointer-events-none" style={{ height: `${heightPx}px` }}>
-                {/* Head */}
-                <div 
-                  className={`rounded-full flex-shrink-0 shadow-sm relative z-10 transition-all ${isSelected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}
-                  style={{ 
-                    width: char.gender === 'male' ? '32px' : '28px', 
-                    height: char.gender === 'male' ? '32px' : '28px', 
-                    backgroundColor: char.color,
-                    opacity: isSelected ? 1 : 0.8
-                  }}
-                />
-                
-                {/* Body */}
-                <div 
-                  className="flex-grow shadow-sm relative mt-1 transition-all"
-                  style={{ 
-                    backgroundColor: char.color, 
-                    width: char.gender === 'male' ? '54px' : '46px',
-                    clipPath: char.gender === 'male' 
-                      ? 'polygon(0 0, 100% 0, 80% 100%, 20% 100%)' // Broad shoulders, narrow waist
-                      : 'polygon(25% 0, 75% 0, 100% 100%, 0 100%)', // Narrow shoulders, wide hips/skirt
-                    opacity: isSelected ? 1 : 0.8
-                  }}
-                />
-              </div>
-
-              {/* Name Label below */}
-              <div className="absolute top-full mt-3 text-center w-32 left-1/2 -translate-x-1/2 pointer-events-none">
-                <p className={`font-semibold truncate flex items-center justify-center gap-1 transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-800'}`}>
-                  {char.name}
-                  {char.notionUrl && <ExternalLink size={12} className={isSelected ? 'text-blue-600' : 'text-blue-500'} />}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {char.gender === 'male' ? '남성' : '여성'}
-                  {char.series && <span className="block text-[10px] text-gray-400 truncate mt-0.5">{char.series}</span>}
-                </p>
-              </div>
-            </Reorder.Item>
-          );
-        })}
-        </Reorder.Group>
       </div>
 
-      {/* Character Detail Drawer */}
       <CharacterDetailDrawer 
         character={characters.find(c => c.id === selectedId) || null}
         onClose={() => setSelectedId(null)}
+        onUpdate={onUpdate}
       />
     </div>
   );
