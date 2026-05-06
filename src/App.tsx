@@ -183,7 +183,7 @@ export default function App() {
         {/* Banner Image Background */}
         <div className="absolute inset-0 z-0">
           <img 
-            src="/app-banner.jpg" 
+            src="/app-banner.png" 
             alt="Header Banner"
             className="w-full h-full object-cover opacity-20"
           />
