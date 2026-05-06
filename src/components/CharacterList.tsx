@@ -28,7 +28,7 @@ export default function CharacterList({ characters, onEdit, onDelete }: Props) {
                 {char.notionUrl && <ExternalLink size={12} className="text-blue-500 flex-shrink-0" title="노션 링크 있음" />}
               </p>
               <p className="text-xs text-gray-500">
-                {char.height}cm • {char.gender === 'male' ? '남성형' : '여성형'}
+                {char.height}cm • {char.gender === 'male' ? '남성' : '여성'}
                 {char.series && ` • ${char.series}`}
               </p>
             </div>
