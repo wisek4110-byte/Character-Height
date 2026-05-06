@@ -1,14 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ExternalLink, Ruler, User, Book } from 'lucide-react';
+import { X, ExternalLink, Ruler, User, Book, Pencil } from 'lucide-react';
 import { Character } from '../types';
+import CharacterForm from './CharacterForm';
 
 interface Props {
   character: Character | null;
   onClose: () => void;
+  onUpdate?: (character: Character) => Promise<void> | void;
 }
 
-export default function CharacterDetailDrawer({ character, onClose }: Props) {
+export default function CharacterDetailDrawer({ character, onClose, onUpdate }: Props) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setIsEditing(false);
+  }, [character]);
   return (
     <AnimatePresence>
       {character && (
@@ -43,7 +50,21 @@ export default function CharacterDetailDrawer({ character, onClose }: Props) {
 
             {/* Content */}
             <div className="flex-grow overflow-y-auto p-6 space-y-8">
-              {/* Visual Header */}
+              {isEditing ? (
+                <div>
+                  <h4 className="text-xl font-bold mb-4">인물 수정</h4>
+                  <CharacterForm
+                    editingCharacter={character}
+                    onSave={(updated) => {
+                      if (onUpdate) onUpdate(updated);
+                      setIsEditing(false);
+                    }}
+                    onCancel={() => setIsEditing(false)}
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* Visual Header */}
               <div className="flex items-center space-x-4">
                 <div 
                   className="w-16 h-16 rounded-2xl shadow-inner"
@@ -51,7 +72,12 @@ export default function CharacterDetailDrawer({ character, onClose }: Props) {
                 />
                 <div>
                   <h4 className="text-2xl font-bold text-gray-900">{character.name}</h4>
-                  <p className="text-gray-500">{character.series || '시리즈 정보 없음'}</p>
+                  {character.series && (
+                    <div className="flex items-center space-x-1.5 text-gray-500 mt-1">
+                      <Book size={16} />
+                      <span className="text-sm font-medium">{character.series}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -67,10 +93,10 @@ export default function CharacterDetailDrawer({ character, onClose }: Props) {
                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                   <div className="flex items-center text-gray-500 mb-1">
                     <User size={16} className="mr-1" />
-                    <span className="text-xs font-medium">체형</span>
+                    <span className="text-xs font-medium">성별</span>
                   </div>
                   <p className="text-lg font-bold text-gray-900">
-                    {character.gender === 'male' ? '남성형' : '여성형'}
+                    {character.gender === 'male' ? '남성' : '여성'}
                   </p>
                 </div>
               </div>
@@ -89,36 +115,42 @@ export default function CharacterDetailDrawer({ character, onClose }: Props) {
                 </div>
               </div>
 
-              {/* Series Info */}
-              {character.series && (
-                <div className="flex items-center space-x-2 text-gray-600 bg-gray-50 p-4 rounded-xl">
-                  <Book size={18} />
-                  <span className="text-sm font-medium">{character.series}</span>
-                </div>
+                </>
               )}
             </div>
 
             {/* Footer / Action */}
-            <div className="p-6 border-t bg-gray-50">
-              {character.notionUrl ? (
-                <a 
-                  href={character.notionUrl}
+            {!isEditing && (
+              <div className="p-6 border-t bg-gray-50 flex gap-3">
+                {character.notionUrl ? (
+                  <a 
+                    href={character.notionUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
                 >
                   <ExternalLink size={20} />
-                  노션 페이지 열기
+                  노션 페이지
                 </a>
               ) : (
                 <button 
                   disabled
-                  className="w-full flex items-center justify-center gap-2 bg-gray-200 text-gray-400 py-4 rounded-2xl font-bold cursor-not-allowed"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gray-200 text-gray-400 py-4 rounded-2xl font-bold cursor-not-allowed"
                 >
-                  노션 링크 없음
+                  노션 없음
                 </button>
-              )}
-            </div>
+                )}
+                {onUpdate && !character.isObject && (
+                  <button 
+                    onClick={() => setIsEditing(true)}
+                    className="flex flex-col items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 px-6 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all active:scale-95"
+                  >
+                    <Pencil size={20} />
+                    <span className="text-[10px] uppercase">수정</span>
+                  </button>
+                )}
+              </div>
+            )}
           </motion.div>
         </>
       )}
