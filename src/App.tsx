@@ -32,8 +32,7 @@ export default function App() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const shareId = urlParams.get('id');
-  const isReadOnly = !!shareId;
-
+  
   // Track Auth State Let
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -42,9 +41,11 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  const isReadOnly = !!shareId && (!user || shareId !== user.uid);
+
   // Load Data
   useEffect(() => {
-    if (isReadOnly && shareId) {
+    if (shareId) {
       const docRef = doc(db, 'projects', shareId);
       getDoc(docRef).then((snap) => {
         if (snap.exists()) {
@@ -52,11 +53,12 @@ export default function App() {
           setCharacters(data.characters || []);
           setSelectedObjects(data.selectedObjects || []);
         } else {
-          alert('공유된 데이터를 찾을 수 없습니다.');
+          alert('데이터를 찾을 수 없습니다.');
         }
         setIsLoading(false);
       }).catch(e => {
         handleFirestoreError(e, OperationType.GET, `projects/${shareId}`);
+        setIsLoading(false);
       });
     } else {
       const localChars = localStorage.getItem('local_characters');
@@ -65,7 +67,7 @@ export default function App() {
       if (localObjs) setSelectedObjects(JSON.parse(localObjs));
       setIsLoading(false);
     }
-  }, [isReadOnly, shareId]);
+  }, [shareId]);
 
   // Local Auto Save
   useEffect(() => {
@@ -111,6 +113,13 @@ export default function App() {
         selectedObjects,
         updatedAt: new Date().toISOString()
       });
+      
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('id') !== user.uid) {
+        url.searchParams.set('id', user.uid);
+        window.history.replaceState({}, '', url.toString());
+      }
+      
       alert('데이터가 성공적으로 저장되었습니다!');
     } catch (e) {
       alert('저장에 실패했습니다.');
