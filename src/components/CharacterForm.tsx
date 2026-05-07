@@ -111,14 +111,14 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">소설/시리즈 (선택)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">소설/시리즈 (선택, 콤마로 구분)</label>
             <input 
               type="text" 
               name="series" 
               value={formData.series || ''} 
               onChange={handleChange} 
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="예: 해리포터"
+              placeholder="예: 해리포터, 신비한 동물사전"
             />
           </div>
         </div>
