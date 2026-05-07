@@ -5,20 +5,16 @@ import HeightChart from './components/HeightChart';
 import CharacterList from './components/CharacterList';
 import ConfirmModal from './components/ConfirmModal';
 import ObjectSelector from './components/ObjectSelector';
-import { db } from './firebase';
-import { LayoutDashboard, UserPlus, Users, Box } from 'lucide-react';
+import { auth, db } from './firebase';
+import { LayoutDashboard, UserPlus, Users, Box, Share2, Check, LogIn, LogOut, Save } from 'lucide-react';
 import { 
-  collection, 
-  onSnapshot, 
   doc, 
   setDoc, 
-  deleteDoc, 
-  query, 
-  orderBy,
-  getDocs,
-  writeBatch,
-  where
+  getDoc
 } from 'firebase/firestore';
+import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
+
+import { handleFirestoreError, OperationType } from './firestoreError';
 
 export default function App() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -27,123 +23,155 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
-  const [activeTab, setActiveTab] = useState<'chart' | 'add' | 'list' | 'objects'>('chart');
   const [sidebarTab, setSidebarTab] = useState<'add' | 'list' | 'objects'>('add');
+  
+  const [isCopied, setIsCopied] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [highlightedIds, setHighlightedIds] = useState<string[] | null>(null);
 
-  // Get project ID from URL (e.g., ?id=story1)
-  const [projectId] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('id') || 'default';
-  });
+  const urlParams = new URLSearchParams(window.location.search);
+  const shareId = urlParams.get('id');
+  const isReadOnly = !!shareId;
 
-  // Load selected objects from localStorage per project
+  // Track Auth State Let
   useEffect(() => {
-    const saved = localStorage.getItem(`selected_objects_${projectId}`);
-    if (saved) {
-      try {
-        setSelectedObjects(JSON.parse(saved));
-      } catch (e) {
-        console.error("Error loading selected objects", e);
-      }
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(`selected_objects_${projectId}`, JSON.stringify(selectedObjects));
-    }
-  }, [selectedObjects, projectId, isLoading]);
-
-  // 1. Real-time synchronization from Firestore
-// ... (lines 34-59 remain mostly same, just checking dependency)
-  useEffect(() => {
-    const q = query(
-      collection(db, 'characters'), 
-      where('projectId', '==', projectId)
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const chars: Character[] = [];
-      snapshot.forEach((doc) => {
-        chars.push(doc.data() as Character);
-      });
-      chars.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
-      setCharacters(chars);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Firestore Error:", error);
-      setIsLoading(false);
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
     });
-    return () => unsubscribe();
-  }, [projectId]);
+    return () => unsub();
+  }, []);
 
-  // ... (Migration effect 61-96 continues)
+  // Load Data
   useEffect(() => {
-    const migrateData = async () => {
-      const saved = localStorage.getItem('novel_characters');
-      if (saved) {
-        try {
-          const localChars: Character[] = JSON.parse(saved);
-          if (localChars.length > 0) {
-            const snapshot = await getDocs(query(collection(db, 'characters'), where('projectId', '==', projectId)));
-            if (snapshot.empty) {
-              const batch = writeBatch(db);
-              localChars.forEach((char, index) => {
-                const docRef = doc(db, 'characters', char.id);
-                batch.set(docRef, { 
-                  ...char, 
-                  projectId, 
-                  order: index 
-                });
-              });
-              await batch.commit();
-            }
-            localStorage.removeItem('novel_characters');
-          }
-        } catch (e) {}
-      }
-    };
-    if (!isLoading) migrateData();
-  }, [isLoading, projectId]);
-
-  const handleSave = async (character: Character) => {
-    try {
-      let order = character.order;
-      if (order === undefined) {
-        if (characters.length > 0) {
-          order = Math.min(...characters.map(c => c.order ?? 0)) - 1;
+    if (isReadOnly && shareId) {
+      const docRef = doc(db, 'projects', shareId);
+      getDoc(docRef).then((snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setCharacters(data.characters || []);
+          setSelectedObjects(data.selectedObjects || []);
         } else {
-          order = 0;
+          alert('공유된 데이터를 찾을 수 없습니다.');
         }
-      }
-      
-      const charData = {
-        ...character,
-        projectId,
-        order
-      };
-      await setDoc(doc(db, 'characters', character.id), charData);
-      setEditingCharacter(null);
-      // Switch back to list or chart after save on mobile
-      if (window.innerWidth < 1024) {
-        setActiveTab('list');
-      }
-    } catch (error) {
-      console.error("Error saving character:", error);
-      alert("저장 중 오류가 발생했습니다.");
+        setIsLoading(false);
+      }).catch(e => {
+        handleFirestoreError(e, OperationType.GET, `projects/${shareId}`);
+      });
+    } else {
+      const localChars = localStorage.getItem('local_characters');
+      const localObjs = localStorage.getItem('local_objects');
+      if (localChars) setCharacters(JSON.parse(localChars));
+      if (localObjs) setSelectedObjects(JSON.parse(localObjs));
+      setIsLoading(false);
+    }
+  }, [isReadOnly, shareId]);
+
+  // Local Auto Save
+  useEffect(() => {
+    if (!isReadOnly && !isLoading) {
+      localStorage.setItem('local_characters', JSON.stringify(characters));
+      localStorage.setItem('local_objects', JSON.stringify(selectedObjects));
+    }
+  }, [characters, selectedObjects, isReadOnly, isLoading]);
+
+  const handleCopyLink = () => {
+    if (!user) {
+      alert("공유 링크를 생성하려면 먼저 로그인해야 합니다.");
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('id', user.uid);
+    navigator.clipboard.writeText(url.toString());
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const login = () => signInWithPopup(auth, new GoogleAuthProvider());
+  const logout = () => signOut(auth);
+
+  const saveToCloud = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'projects', user.uid), {
+        authorId: user.uid,
+        characters,
+        selectedObjects,
+        updatedAt: new Date().toISOString()
+      });
+      alert('데이터가 성공적으로 저장되었습니다!');
+    } catch (e) {
+      alert('저장에 실패했습니다.');
+      handleFirestoreError(e, OperationType.WRITE, `projects/${user.uid}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleToggleObject = (obj: Character) => {
-    setSelectedObjects(prev => {
-      if (prev.find(o => o.id === obj.id)) {
-        return prev.filter(o => o.id !== obj.id);
+  const loadFromCloud = async () => {
+    if (!user) return;
+    try {
+      const docRef = doc(db, 'projects', user.uid);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        setCharacters(data.characters || []);
+        setSelectedObjects(data.selectedObjects || []);
+        alert('클라우드에서 데이터를 불러왔습니다.');
+      } else {
+        alert('저장된 데이터가 없습니다.');
       }
+    } catch (e) {
+      alert('불러오기에 실패했습니다.');
+      handleFirestoreError(e, OperationType.GET, `projects/${user.uid}`);
+    }
+  };
+
+  const handleSave = (character: Character) => {
+    if (isReadOnly) return;
+    let order = character.order;
+    if (order === undefined) {
+      order = characters.length > 0 ? Math.min(...characters.map(c => c.order ?? 0)) - 1 : 0;
+    }
+    
+    setCharacters(prev => {
+      const existing = prev.findIndex(c => c.id === character.id);
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing] = { ...character, order: prev[existing].order }; // Keep existing order when editing
+        return next;
+      }
+      return [...prev, { ...character, order }];
+    });
+    setEditingCharacter(null);
+    if (window.innerWidth < 1024) setActiveTab('list'); // activeTab fallback
+  };
+
+  const handleReorder = (newOrder: Character[]) => {
+    if (isReadOnly) return;
+    const updated = newOrder.map((char, index) => ({ ...char, order: index }));
+    // We update only the characters that are active (non-objects)
+    setCharacters(prev => {
+      const merged = [...prev];
+      updated.forEach(u => {
+        const idx = merged.findIndex(c => c.id === u.id);
+        if (idx >= 0) merged[idx] = u;
+      });
+      return merged;
+    });
+  };
+
+  const handleToggleObject = (obj: Character) => {
+    if (isReadOnly) return;
+    setSelectedObjects(prev => {
+      if (prev.find(o => o.id === obj.id)) return prev.filter(o => o.id !== obj.id);
       return [...prev, obj];
     });
   };
 
   const handleDelete = (id: string) => {
+    if (isReadOnly) return;
     const char = characters.find(c => c.id === id);
     if (char) {
       setCharacterToDelete(char);
@@ -151,17 +179,16 @@ export default function App() {
     }
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!characterToDelete) return;
-    try {
-      await deleteDoc(doc(db, 'characters', characterToDelete.id));
-      if (editingCharacter?.id === characterToDelete.id) {
-        setEditingCharacter(null);
-      }
-      setIsDeleteModalOpen(false);
-      setCharacterToDelete(null);
-    } catch (error) {}
+    setCharacters(prev => prev.filter(c => c.id !== characterToDelete.id));
+    if (editingCharacter?.id === characterToDelete.id) setEditingCharacter(null);
+    setIsDeleteModalOpen(false);
+    setCharacterToDelete(null);
   };
+
+  // set activeTab fallback
+  const [activeTab, setActiveTab] = useState<'chart' | 'add' | 'list' | 'objects'>('chart');
 
   if (isLoading) {
     return (
@@ -174,13 +201,11 @@ export default function App() {
     );
   }
 
-  // Combined list for HeightChart (Objects always at the back)
   const allEntitiesForChart = [...selectedObjects, ...characters];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm relative overflow-hidden">
-        {/* Banner Image Background */}
         <div className="absolute inset-0 z-0">
           <img 
             src="/app-banner.png" 
@@ -199,110 +224,158 @@ export default function App() {
               <h1 className="text-xl font-bold text-gray-900 leading-tight">소설 인물 키 비교</h1>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-4">
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] text-gray-400 font-bold uppercase">Project</span>
-              <span className="text-sm font-semibold text-gray-700">{projectId}</span>
-            </div>
+          <div className="flex items-center gap-3">
+            {!isReadOnly && (
+              <>
+                {user ? (
+                  <>
+                    <button 
+                      onClick={loadFromCloud}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-200"
+                    >
+                      <LogOut size={16} className="rotate-180" />
+                      <span className="hidden sm:inline">불러오기</span>
+                    </button>
+                    <button 
+                      onClick={saveToCloud}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-blue-600 hover:bg-blue-700 text-white border border-blue-700"
+                    >
+                      <Save size={16} />
+                      <span className="hidden sm:inline">{isSaving ? '저장 중...' : '저장하기'}</span>
+                    </button>
+                    <button 
+                      onClick={handleCopyLink}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm ${
+                        isCopied 
+                          ? 'bg-green-100 text-green-700 border border-green-200' 
+                          : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
+                      }`}
+                    >
+                      {isCopied ? <Check size={16} /> : <Share2 size={16} />}
+                      <span className="hidden sm:inline">{isCopied ? '링크 복사됨' : '공유'}</span>
+                    </button>
+                    <button 
+                       onClick={logout}
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+                    >
+                       <LogOut size={16} />
+                       <span className="hidden sm:inline">로그아웃</span>
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={login}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+                  >
+                    <LogIn size={16} />
+                    <span className="hidden sm:inline">로그인하여 저장</span>
+                  </button>
+                )}
+              </>
+            )}
+            {isReadOnly && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                <span className="hidden sm:inline">공유된 차트 (읽기 전용)</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
       <main className="flex-grow p-4 lg:p-6 flex flex-col gap-6">
-        {/* Main Content Area: Responsive Layout */}
         <div className="flex flex-col lg:flex-row gap-6 h-full flex-grow overflow-hidden min-h-[calc(100vh-140px)]">
           
-          {/* Chart Area - Stays on top on mobile, grows on desktop */}
           <div className="flex-grow order-1 lg:order-2 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[450px] lg:h-full overflow-hidden min-w-0">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white z-20">
               <div className="flex items-center gap-2">
                 <LayoutDashboard size={20} className="text-blue-600" />
                 <h2 className="text-lg font-bold text-gray-800">키 비교 차트</h2>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-medium text-gray-400">자유로운 드래그 비교</span>
-              </div>
             </div>
             <div className="flex-grow min-h-0 bg-slate-50/5">
               <HeightChart 
                 characters={allEntitiesForChart} 
-                onUpdate={handleSave}
+                onUpdate={isReadOnly ? undefined : handleSave}
+                onReorder={isReadOnly ? undefined : handleReorder}
+                highlightedIds={highlightedIds}
               />
             </div>
           </div>
 
-          {/* Control Sidebar/Bottombar - Below chart on mobile, Left on desktop */}
-          <div className="w-full lg:w-[320px] order-2 lg:order-1 flex-shrink-0 flex flex-col space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden h-full lg:max-h-[calc(100vh-140px)]">
-              {/* Tabs */}
-              <div className="flex border-b border-gray-100 bg-gray-50/50">
-                {[
-                  { id: 'add', label: '추가', icon: UserPlus },
-                  { id: 'list', label: '목록', icon: Users },
-                  { id: 'objects', label: '사물', icon: Box },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setSidebarTab(tab.id as 'add' | 'list' | 'objects')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 text-sm font-bold transition-all border-b-2 ${
-                      sidebarTab === tab.id 
-                        ? 'border-blue-600 text-blue-600 bg-white' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'
-                    }`}
-                  >
-                    <tab.icon size={18} />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+          {!isReadOnly && (
+            <div className="w-full lg:w-[320px] order-2 lg:order-1 flex-shrink-0 flex flex-col space-y-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden h-full lg:max-h-[calc(100vh-140px)]">
+                <div className="flex border-b border-gray-100 bg-gray-50/50">
+                  {[
+                    { id: 'add', label: '추가', icon: UserPlus },
+                    { id: 'list', label: '목록', icon: Users },
+                    { id: 'objects', label: '사물', icon: Box },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSidebarTab(tab.id as 'add' | 'list' | 'objects')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 text-sm font-bold transition-all border-b-2 ${
+                        sidebarTab === tab.id 
+                          ? 'border-blue-600 text-blue-600 bg-white' 
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'
+                      }`}
+                    >
+                      <tab.icon size={18} />
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
 
-              <div className="p-5 overflow-y-auto custom-scrollbar flex-grow min-h-[400px]">
-                {sidebarTab === 'add' && (
-                  <div>
-                    <h2 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-800">
-                      <UserPlus size={18} className="text-blue-600" />
-                      {editingCharacter ? '인물 수정' : '새 인물 추가'}
-                    </h2>
-                    <CharacterForm 
-                      onSave={handleSave} 
-                      editingCharacter={editingCharacter} 
-                      onCancel={() => setEditingCharacter(null)}
-                    />
-                  </div>
-                )}
-                
-                {sidebarTab === 'list' && (
-                  <div>
-                    <h2 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-800">
-                      <Users size={18} className="text-blue-600" />
-                      인물 목록
-                    </h2>
-                    <CharacterList 
-                      characters={characters} 
-                      onEdit={(c) => {
-                        setEditingCharacter(c);
-                        setSidebarTab('add');
-                      }} 
-                      onDelete={handleDelete} 
-                    />
-                  </div>
-                )}
+                <div className="p-5 overflow-y-auto custom-scrollbar flex-grow min-h-[400px]">
+                  {sidebarTab === 'add' && (
+                    <div>
+                      <h2 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-800">
+                        <UserPlus size={18} className="text-blue-600" />
+                        {editingCharacter ? '인물 수정' : '새 인물 추가'}
+                      </h2>
+                      <CharacterForm 
+                        onSave={handleSave} 
+                        editingCharacter={editingCharacter} 
+                        onCancel={() => setEditingCharacter(null)}
+                      />
+                    </div>
+                  )}
+                  
+                  {sidebarTab === 'list' && (
+                    <div>
+                      <h2 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-800">
+                        <Users size={18} className="text-blue-600" />
+                        인물 목록
+                      </h2>
+                      <CharacterList 
+                        characters={characters} 
+                        onEdit={(c) => {
+                          setEditingCharacter(c);
+                          setSidebarTab('add');
+                        }} 
+                        onDelete={handleDelete} 
+                        onFilterChange={setHighlightedIds}
+                      />
+                    </div>
+                  )}
 
-                {sidebarTab === 'objects' && (
-                  <div>
-                    <h2 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-800">
-                      <Box size={18} className="text-blue-600" />
-                      비교용 사물
-                    </h2>
-                    <ObjectSelector 
-                      selectedObjectIds={selectedObjects.map(o => o.id)} 
-                      onToggleObject={handleToggleObject} 
-                    />
-                  </div>
-                )}
+                  {sidebarTab === 'objects' && (
+                    <div>
+                      <h2 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-800">
+                        <Box size={18} className="text-blue-600" />
+                        비교용 사물
+                      </h2>
+                      <ObjectSelector 
+                        selectedObjectIds={selectedObjects.map(o => o.id)} 
+                        onToggleObject={handleToggleObject} 
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
 
@@ -319,3 +392,4 @@ export default function App() {
     </div>
   );
 }
+
