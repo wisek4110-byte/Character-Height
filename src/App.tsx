@@ -41,31 +41,54 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  const isReadOnly = !!shareId && (!user || shareId !== user.uid);
+  const [projectAuthorId, setProjectAuthorId] = useState<string | null>(null);
+  const isCloudProject = !!projectAuthorId;
+  const isReadOnly = isCloudProject && (!user || user.uid !== projectAuthorId);
 
   // Load Data
   useEffect(() => {
-    if (shareId) {
-      const docRef = doc(db, 'projects', shareId);
-      getDoc(docRef).then((snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setCharacters(data.characters || []);
-          setSelectedObjects(data.selectedObjects || []);
-        } else {
-          alert('데이터를 찾을 수 없습니다.');
+    const loadData = async () => {
+      let loadedFromCloud = false;
+      if (shareId) {
+        try {
+          const docRef = doc(db, 'projects', shareId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            setCharacters(data.characters || []);
+            setSelectedObjects(data.selectedObjects || []);
+            setProjectAuthorId(data.authorId || shareId);
+            loadedFromCloud = true;
+          }
+        } catch (e) {
+          console.error("Failed to load from cloud", e);
         }
-        setIsLoading(false);
-      }).catch(e => {
-        handleFirestoreError(e, OperationType.GET, `projects/${shareId}`);
-        setIsLoading(false);
-      });
-    } else {
-      setCharacters([]);
-      setSelectedObjects([]);
+      }
+      
+      if (!loadedFromCloud) {
+        setProjectAuthorId(null);
+        const localChars = (shareId ? localStorage.getItem(`local_characters_${shareId}`) : null) || localStorage.getItem('local_characters');
+        const localObjs = (shareId ? localStorage.getItem(`local_objects_${shareId}`) : null) || localStorage.getItem('local_objects');
+        if (localChars) setCharacters(JSON.parse(localChars));
+        if (localObjs) setSelectedObjects(JSON.parse(localObjs));
+      }
       setIsLoading(false);
-    }
+    };
+    
+    loadData();
   }, [shareId]);
+
+  // Local Auto Save
+  useEffect(() => {
+    if (!isLoading && !isReadOnly && (characters.length > 0 || selectedObjects.length > 0)) {
+      localStorage.setItem('local_characters', JSON.stringify(characters));
+      localStorage.setItem('local_objects', JSON.stringify(selectedObjects));
+      if (shareId && !isCloudProject) {
+        localStorage.setItem(`local_characters_${shareId}`, JSON.stringify(characters));
+        localStorage.setItem(`local_objects_${shareId}`, JSON.stringify(selectedObjects));
+      }
+    }
+  }, [characters, selectedObjects, isLoading, isReadOnly, shareId, isCloudProject]);
 
   const handleCopyLink = () => {
     if (!user) {
