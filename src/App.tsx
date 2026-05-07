@@ -67,28 +67,14 @@ export default function App() {
       
       if (!loadedFromCloud) {
         setProjectAuthorId(null);
-        const localChars = (shareId ? localStorage.getItem(`local_characters_${shareId}`) : null) || localStorage.getItem('local_characters');
-        const localObjs = (shareId ? localStorage.getItem(`local_objects_${shareId}`) : null) || localStorage.getItem('local_objects');
-        if (localChars) setCharacters(JSON.parse(localChars));
-        if (localObjs) setSelectedObjects(JSON.parse(localObjs));
+        setCharacters([]);
+        setSelectedObjects([]);
       }
       setIsLoading(false);
     };
     
     loadData();
   }, [shareId]);
-
-  // Local Auto Save
-  useEffect(() => {
-    if (!isLoading && !isReadOnly && (characters.length > 0 || selectedObjects.length > 0)) {
-      localStorage.setItem('local_characters', JSON.stringify(characters));
-      localStorage.setItem('local_objects', JSON.stringify(selectedObjects));
-      if (shareId && !isCloudProject) {
-        localStorage.setItem(`local_characters_${shareId}`, JSON.stringify(characters));
-        localStorage.setItem(`local_objects_${shareId}`, JSON.stringify(selectedObjects));
-      }
-    }
-  }, [characters, selectedObjects, isLoading, isReadOnly, shareId, isCloudProject]);
 
   const handleCopyLink = () => {
     if (!user) {
