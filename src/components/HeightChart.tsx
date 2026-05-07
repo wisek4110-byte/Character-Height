@@ -3,13 +3,13 @@ import { Character } from '../types';
 import { ExternalLink, MoveHorizontal } from 'lucide-react';
 import CharacterDetailDrawer from './CharacterDetailDrawer';
 import { motion, Reorder } from 'motion/react';
-import { db } from '../firebase';
-import { doc, writeBatch } from 'firebase/firestore';
 import ObjectVisual from './ObjectVisual';
 
 interface Props {
   characters: Character[];
   onUpdate?: (character: Character) => void;
+  onReorder?: (newOrder: Character[]) => void;
+  highlightedIds?: string[] | null;
 }
 
 type SortOption = 'custom' | 'height' | 'gender' | 'name';
@@ -22,9 +22,10 @@ interface DraggableObjectProps {
   characterCount: number;
   latestCharacterHeight: number;
   chartAreaRef: React.RefObject<HTMLDivElement>;
+  isFaded?: boolean;
 }
 
-const DraggableObject: React.FC<DraggableObjectProps> = ({ obj, index, characterCount, latestCharacterHeight, chartAreaRef }) => {
+const DraggableObject: React.FC<DraggableObjectProps> = ({ obj, index, characterCount, latestCharacterHeight, chartAreaRef, isFaded }) => {
   const heightPx = obj.height * PIXELS_PER_CM;
   const widthPx = (obj.width || 50) * PIXELS_PER_CM;
   
@@ -55,7 +56,7 @@ const DraggableObject: React.FC<DraggableObjectProps> = ({ obj, index, character
       dragElastic={0.05}
       dragMomentum={true}
       onContextMenu={(e) => e.preventDefault()}
-      className="absolute cursor-grab active:cursor-grabbing pointer-events-auto z-10"
+      className={`absolute cursor-grab active:cursor-grabbing pointer-events-auto z-10 transition-all duration-300 ${isFaded ? 'opacity-20 grayscale brightness-110' : 'opacity-100'}`}
       style={{ left: `${startXPx}px`, bottom: `${bottomPx}px`, touchAction: 'none' }}
     >
       <div className="flex flex-col items-center group relative">
@@ -71,7 +72,7 @@ const DraggableObject: React.FC<DraggableObjectProps> = ({ obj, index, character
   );
 };
 
-export default function HeightChart({ characters, onUpdate }: Props) {
+export default function HeightChart({ characters, onUpdate, onReorder, highlightedIds }: Props) {
   const [sortBy, setSortBy] = useState<SortOption>('custom');
   const [filterSeries, setFilterSeries] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -109,17 +110,10 @@ export default function HeightChart({ characters, onUpdate }: Props) {
     return (a.order ?? 0) - (b.order ?? 0);
   });
 
-  const handleReorder = async (newOrder: Character[]) => {
+  const handleReorder = (newOrder: Character[]) => {
     if (sortBy !== 'custom') return;
-    try {
-      const batch = writeBatch(db);
-      newOrder.forEach((char, index) => {
-        const docRef = doc(db, 'characters', char.id);
-        batch.update(docRef, { order: index });
-      });
-      await batch.commit();
-    } catch (error) {
-      console.error("Error updating order:", error);
+    if (onReorder) {
+      onReorder(newOrder);
     }
   };
 
@@ -204,7 +198,7 @@ export default function HeightChart({ characters, onUpdate }: Props) {
                // Calculate latest character height for bed positioning
                const latestChar = sortedCharacters.length > 0 ? sortedCharacters[sortedCharacters.length - 1] : null;
                const latestCharacterHeight = latestChar ? latestChar.height : 170; // 170 as fallback
-               
+               const isFaded = highlightedIds !== null && highlightedIds !== undefined && highlightedIds.length > 0 && !highlightedIds.includes(obj.id);
                return (
                  <DraggableObject 
                    key={obj.id}
@@ -213,6 +207,7 @@ export default function HeightChart({ characters, onUpdate }: Props) {
                    characterCount={characterCount}
                    latestCharacterHeight={latestCharacterHeight}
                    chartAreaRef={chartAreaRef}
+                   isFaded={isFaded}
                  />
                );
              })}
@@ -229,12 +224,13 @@ export default function HeightChart({ characters, onUpdate }: Props) {
           >
             {sortedCharacters.map(char => {
               const isSelected = selectedId === char.id;
+              const isFaded = highlightedIds !== null && highlightedIds !== undefined && highlightedIds.length > 0 && !highlightedIds.includes(char.id);
               return (
                 <Reorder.Item 
                   key={char.id}
                   value={char}
                   dragListener={sortBy === 'custom'}
-                  className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing outline-none pointer-events-auto ${isSelected ? 'z-30' : 'z-20'}`}
+                  className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing outline-none pointer-events-auto transition-all duration-300 ${isSelected ? 'z-30' : 'z-20'} ${isFaded ? 'opacity-20 grayscale brightness-110' : 'opacity-100'}`}
                   onClick={(e) => { e.stopPropagation(); setSelectedId(char.id); }}
                 >
                   <div className={`flex flex-col items-center justify-end transition-transform duration-300 origin-bottom ${isSelected ? '-translate-y-2' : 'group-hover:-translate-y-2'}`}>
