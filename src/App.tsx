@@ -108,7 +108,9 @@ export default function App() {
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/requests-from-referer-are-blocked' || error.message?.includes('auth/requests-from-referer')) {
-        alert('구글 클라우드 콘솔(Google Cloud Console)에서 API 키의 HTTP 리퍼러 제한에 현재 URL(*.run.app)을 추가하거나 제한을 해제해주세요.\n또한 파이어베이스(Firebase) 콘솔의 Authentication > 설정 > 승인된 도메인에 현재 URL을 추가해주세요.');
+        alert('구글 클라우드 콘솔(Google Cloud Console)의 "Browser key (auto created by Firebase)" API 키 제한 설정에 다음 URL들을 모두 추가해주세요:\n\n1. *.run.app\n2. *.firebaseapp.com (또는 gen-lang-client-0175785664.firebaseapp.com)\n\nFirebase Auth 팝업이 firebaseapp.com 도메인을 통해 실행되기 때문에 해당 도메인도 허용해야 합니다.');
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        alert('로그인 팝업이 닫혔습니다. 브라우저 설정에서 팝업 차단이 되어있지 않은지 확인하거나, 로그인 창이 뜨면 닫지 말고 계속 진행해주세요.');
       } else {
         alert(`로그인 중 오류가 발생했습니다 (${error.code || '알 수 없는 오류'}): ${error.message}`);
       }
