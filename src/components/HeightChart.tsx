@@ -90,7 +90,12 @@ export default function HeightChart({ characters, onUpdate, onReorder, highlight
     }
   };
 
-  const uniqueSeries = Array.from(new Set(characters.map(c => c.series).filter(Boolean) as string[]));
+  const uniqueSeries = Array.from(new Set(
+    characters
+      .map(c => c.series)
+      .filter(Boolean)
+      .flatMap(s => (s as string).split(',').map(item => item.trim()).filter(Boolean))
+  )).sort();
 
   const characterList = characters.filter(c => !c.isObject);
   const objectList = characters.filter(c => c.isObject);
@@ -98,7 +103,9 @@ export default function HeightChart({ characters, onUpdate, onReorder, highlight
   const filteredCharacters = characterList.filter(c => {
     if (filterSeries === 'all') return true;
     if (filterSeries === 'none') return !c.series;
-    return c.series === filterSeries;
+    
+    const seriesList = c.series?.split(',').map(s => s.trim()) || [];
+    return seriesList.includes(filterSeries);
   });
 
   const sortedCharacters = [...filteredCharacters].sort((a, b) => {
