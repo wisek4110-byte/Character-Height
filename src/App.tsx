@@ -49,15 +49,17 @@ export default function App() {
   useEffect(() => {
     const loadData = async () => {
       let loadedFromCloud = false;
-      if (shareId) {
+      const targetId = shareId;
+
+      if (targetId) {
         try {
-          const docRef = doc(db, 'projects', shareId);
+          const docRef = doc(db, 'projects', targetId);
           const snap = await getDoc(docRef);
           if (snap.exists()) {
             const data = snap.data();
             setCharacters(data.characters || []);
             setSelectedObjects(data.selectedObjects || []);
-            setProjectAuthorId(data.authorId || shareId);
+            setProjectAuthorId(data.authorId || targetId);
             loadedFromCloud = true;
           }
         } catch (e) {
@@ -67,8 +69,24 @@ export default function App() {
       
       if (!loadedFromCloud) {
         setProjectAuthorId(null);
-        setCharacters([]);
-        setSelectedObjects([]);
+        
+        // 이전에 저장해둔 로컬 데이터가 있다면 복구 (특히 ?id=사서고생 등 클라우드 연동 전의 데이터 보호)
+        if (shareId) {
+          const localChars = localStorage.getItem(`local_characters_${shareId}`);
+          const localObjs = localStorage.getItem(`local_objects_${shareId}`);
+          if (localChars && JSON.parse(localChars).length > 0) {
+            setCharacters(JSON.parse(localChars));
+            if (localObjs) setSelectedObjects(JSON.parse(localObjs));
+          } else {
+            // 해당 ID의 로컬 데이터마저 없으면 빈 화면
+            setCharacters([]);
+            setSelectedObjects([]);
+          }
+        } else {
+          // 고유 ID가 없는 기본 주소일 때는 항상 빈 화면으로 초기화
+          setCharacters([]);
+          setSelectedObjects([]);
+        }
       }
       setIsLoading(false);
     };
@@ -77,13 +95,11 @@ export default function App() {
   }, [shareId]);
 
   const handleCopyLink = () => {
-    if (!user) {
-      alert("공유 링크를 생성하려면 먼저 로그인해야 합니다.");
+    if (!shareId) {
+      alert("공유 링크를 생성하려면 먼저 클라우드에 저장을 해야 합니다.");
       return;
     }
-    const url = new URL(window.location.href);
-    url.searchParams.set('id', user.uid);
-    navigator.clipboard.writeText(url.toString());
+    navigator.clipboard.writeText(window.location.href);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
@@ -108,32 +124,52 @@ export default function App() {
     if (!user) return;
     setIsSaving(true);
     try {
-      await setDoc(doc(db, 'projects', user.uid), {
-        authorId: user.uid,
-        characters,
-        selectedObjects,
-        updatedAt: new Date().toISOString()
-      });
+      let newId = shareId;
+      
+      if (shareId && projectAuthorId === user.uid) {
+        // Update existing document
+        await setDoc(doc(db, 'projects', shareId), {
+          authorId: user.uid,
+          characters,
+          selectedObjects,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } else {
+        // Create new document (either brand new or branching off someone else's)
+        newId = Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+        await setDoc(doc(db, 'projects', newId), {
+          authorId: user.uid,
+          characters,
+          selectedObjects,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        setProjectAuthorId(user.uid);
+      }
       
       const url = new URL(window.location.href);
-      if (url.searchParams.get('id') !== user.uid) {
-        url.searchParams.set('id', user.uid);
+      if (url.searchParams.get('id') !== newId) {
+        url.searchParams.set('id', newId!);
         window.history.replaceState({}, '', url.toString());
       }
       
       alert('데이터가 성공적으로 저장되었습니다!');
     } catch (e) {
       alert('저장에 실패했습니다.');
-      handleFirestoreError(e, OperationType.WRITE, `projects/${user.uid}`);
+      console.error(e);
     } finally {
       setIsSaving(false);
     }
   };
 
   const loadFromCloud = async () => {
-    if (!user) return;
+    if (!shareId) {
+      alert('저장된 데이터가 없습니다. 먼저 저장해주세요.');
+      return;
+    }
+    setIsLoading(true);
     try {
-      const docRef = doc(db, 'projects', user.uid);
+      const docRef = doc(db, 'projects', shareId);
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data();
@@ -145,7 +181,9 @@ export default function App() {
       }
     } catch (e) {
       alert('불러오기에 실패했습니다.');
-      handleFirestoreError(e, OperationType.GET, `projects/${user.uid}`);
+      console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
