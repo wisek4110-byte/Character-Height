@@ -126,17 +126,19 @@ export default function App() {
     try {
       let newId = shareId;
       
-      if (shareId && projectAuthorId === user.uid) {
-        // Update existing document
+      // 1. 이미 자신이 만든 클라우드 프로젝트이거나
+      // 2. 클라우드에 아직 등록되지 않은 커스텀 ID(예: ?id=사서고생)인 경우 해당 ID 유지
+      if (shareId && (projectAuthorId === user.uid || !isCloudProject)) {
         await setDoc(doc(db, 'projects', shareId), {
           authorId: user.uid,
           characters,
           selectedObjects,
           updatedAt: new Date().toISOString()
         }, { merge: true });
+        setProjectAuthorId(user.uid);
       } else {
-        // Create new document (either brand new or branching off someone else's)
-        newId = Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+        // 다른 사람의 문서를 복사해오거나, ID가 아예 없는 경우 새 랜덤 ID 발급
+        newId = Math.random().toString(36).substr(2, 9);
         await setDoc(doc(db, 'projects', newId), {
           authorId: user.uid,
           characters,
