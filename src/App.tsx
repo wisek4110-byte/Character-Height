@@ -61,21 +61,11 @@ export default function App() {
         setIsLoading(false);
       });
     } else {
-      const localChars = localStorage.getItem('local_characters');
-      const localObjs = localStorage.getItem('local_objects');
-      if (localChars) setCharacters(JSON.parse(localChars));
-      if (localObjs) setSelectedObjects(JSON.parse(localObjs));
+      setCharacters([]);
+      setSelectedObjects([]);
       setIsLoading(false);
     }
   }, [shareId]);
-
-  // Local Auto Save
-  useEffect(() => {
-    if (!isReadOnly && !isLoading) {
-      localStorage.setItem('local_characters', JSON.stringify(characters));
-      localStorage.setItem('local_objects', JSON.stringify(selectedObjects));
-    }
-  }, [characters, selectedObjects, isReadOnly, isLoading]);
 
   const handleCopyLink = () => {
     if (!user) {
