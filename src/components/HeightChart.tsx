@@ -56,7 +56,7 @@ const DraggableObject: React.FC<DraggableObjectProps> = ({ obj, index, character
       dragElastic={0.05}
       dragMomentum={true}
       onContextMenu={(e) => e.preventDefault()}
-      className={`absolute cursor-grab active:cursor-grabbing pointer-events-auto z-10 transition-all duration-300 ${isFaded ? 'opacity-20 grayscale brightness-110' : 'opacity-100'}`}
+      className={`absolute cursor-grab active:cursor-grabbing pointer-events-auto z-10 transition-[opacity,filter] duration-300 ${isFaded ? 'opacity-20 grayscale brightness-110' : 'opacity-100'}`}
       style={{ left: `${startXPx}px`, bottom: `${bottomPx}px`, touchAction: 'none' }}
     >
       <div className="flex flex-col items-center group relative">
@@ -230,7 +230,7 @@ export default function HeightChart({ characters, onUpdate, onReorder, highlight
                   key={char.id}
                   value={char}
                   dragListener={sortBy === 'custom'}
-                  className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing outline-none pointer-events-auto transition-all duration-300 ${isSelected ? 'z-30' : 'z-20'} ${isFaded ? 'opacity-20 grayscale brightness-110' : 'opacity-100'}`}
+                  className={`flex flex-col items-center justify-end group relative cursor-grab active:cursor-grabbing outline-none pointer-events-auto transition-[opacity,filter] duration-300 ${isSelected ? 'z-30' : 'z-20'} ${isFaded ? 'opacity-20 grayscale brightness-110' : 'opacity-100'}`}
                   onClick={(e) => { e.stopPropagation(); setSelectedId(char.id); }}
                 >
                   <div className={`flex flex-col items-center justify-end transition-transform duration-300 origin-bottom ${isSelected ? '-translate-y-2' : 'group-hover:-translate-y-2'}`}>
