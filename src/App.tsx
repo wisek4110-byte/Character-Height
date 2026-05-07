@@ -6,7 +6,7 @@ import CharacterList from './components/CharacterList';
 import ConfirmModal from './components/ConfirmModal';
 import ObjectSelector from './components/ObjectSelector';
 import { auth, db } from './firebase';
-import { LayoutDashboard, UserPlus, Users, Box, Share2, Check, LogIn, LogOut, Save } from 'lucide-react';
+import { LayoutDashboard, UserPlus, Users, Box, Share2, Check, LogIn, LogOut, Save, Copy } from 'lucide-react';
 import { 
   doc, 
   setDoc, 
@@ -29,6 +29,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [highlightedIds, setHighlightedIds] = useState<string[] | null>(null);
+  
+  const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
+  const [newCustomId, setNewCustomId] = useState('');
 
   const urlParams = new URLSearchParams(window.location.search);
   const shareId = urlParams.get('id');
@@ -158,6 +161,42 @@ export default function App() {
       alert('데이터가 성공적으로 저장되었습니다!');
     } catch (e) {
       alert('저장에 실패했습니다.');
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveAsCustomId = async () => {
+    if (!user) return;
+    const customId = newCustomId.trim();
+    if (!customId) {
+        alert('사용할 아이디를 입력해주세요.');
+        return;
+    }
+    
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'projects', customId), {
+        authorId: user.uid,
+        characters,
+        selectedObjects,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      
+      setProjectAuthorId(user.uid);
+      
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('id') !== customId) {
+        url.searchParams.set('id', customId);
+        window.history.replaceState({}, '', url.toString());
+      }
+      
+      alert(`'${customId}' 주소로 저장되었습니다!`);
+      setIsSaveAsModalOpen(false);
+      setNewCustomId('');
+    } catch (e) {
+      alert('저장에 실패했습니다. 이미 다른 사람이 사용 중인 아이디일 수 있습니다.');
       console.error(e);
     } finally {
       setIsSaving(false);
@@ -306,6 +345,13 @@ export default function App() {
                       <span className="hidden sm:inline">{isSaving ? '저장 중...' : '저장하기'}</span>
                     </button>
                     <button 
+                      onClick={() => setIsSaveAsModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border border-indigo-200"
+                    >
+                      <Copy size={16} />
+                      <span className="hidden sm:inline">새 이름으로 저장</span>
+                    </button>
+                    <button 
                       onClick={handleCopyLink}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm ${
                         isCopied 
@@ -450,6 +496,41 @@ export default function App() {
           setCharacterToDelete(null);
         }}
       />
+
+      {isSaveAsModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
+            <h3 className="text-xl font-bold mb-2">새로운 아이디로 저장</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              현재 화면에 있는 데이터들을 새로운 주소(아이디)로 복사하여 저장합니다.
+            </p>
+            <input
+              type="text"
+              value={newCustomId}
+              onChange={(e) => setNewCustomId(e.target.value)}
+              placeholder="예: 사서고생, mychart1"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+              onKeyDown={(e) => e.key === 'Enter' && saveAsCustomId()}
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
+              <button 
+                onClick={() => setIsSaveAsModalOpen(false)}
+                className="px-4 py-2 border rounded-xl hover:bg-gray-50 font-medium"
+              >
+                취소
+              </button>
+              <button 
+                onClick={saveAsCustomId}
+                disabled={isSaving}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium disabled:opacity-50"
+              >
+                {isSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
