@@ -1,44 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    // Collection: characters
-    // Document ID: characterId (UUID)
-    // Fields:
-    //   - id: string (required)
-    //   - name: string (required, 1-100 chars)
-    //   - height: number (required, 50-300)
-    //   - gender: string (required, 'male'|'female')
-    //   - description: string (optional, < 1000 chars)
-    //   - notionUrl: string (optional, valid URL)
-    //   - color: string (required, hex)
-    //   - series: string (optional, < 100 chars)
-    //   - createdAt: timestamp (optional)
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    function isValidCharacter(data) {
-      return data.keys().hasAll(['id', 'name', 'height', 'gender', 'color']) &&
-             data.id is string &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.height is number && data.height >= 50 && data.height <= 300 &&
-             data.gender in ['male', 'female'] &&
-             data.color is string && data.color.matches('^#[0-9a-fA-F]{6}$') &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
-             (!('series' in data) || (data.series is string && data.series.size() <= 100)) &&
-             (!('notionUrl' in data) || (data.notionUrl is string && data.notionUrl.size() <= 500));
+    match /{document=**} { 
+      allow read, write: if false; 
     }
 
-    match /characters/{characterId} {
-      // For this specific app, we allow public read/write to enable easy sharing 
-      // without requiring user accounts, as requested for Notion embedding.
+    match /projects/{projectId} {
       allow read: if true;
-      allow create: if isValidCharacter(request.resource.data);
-      allow update: if isValidCharacter(request.resource.data);
-      allow delete: if true;
+      allow write: if request.auth != null && request.auth.uid == projectId;
     }
   }
 }
+
+
