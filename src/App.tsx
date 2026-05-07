@@ -350,9 +350,32 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!isReadOnly && (
+            {isReadOnly && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                <span className="hidden sm:inline">공유된 차트 (읽기 전용)</span>
+              </div>
+            )}
+            
+            {user ? (
               <>
-                {user ? (
+                {isReadOnly ? (
+                  <>
+                    <button 
+                      onClick={() => setIsSaveAsModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border border-indigo-200"
+                    >
+                      <Copy size={16} />
+                      <span className="hidden sm:inline">내 차트로 복사하기</span>
+                    </button>
+                    <button 
+                       onClick={logout}
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+                    >
+                       <LogOut size={16} />
+                       <span className="hidden sm:inline">로그아웃</span>
+                    </button>
+                  </>
+                ) : (
                   <>
                     <button 
                       onClick={loadFromCloud}
@@ -404,21 +427,16 @@ export default function App() {
                        <span className="hidden sm:inline">로그아웃</span>
                     </button>
                   </>
-                ) : (
-                  <button 
-                    onClick={login}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-                  >
-                    <LogIn size={16} />
-                    <span className="hidden sm:inline">로그인하여 저장</span>
-                  </button>
                 )}
               </>
-            )}
-            {isReadOnly && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                <span className="hidden sm:inline">공유된 차트 (읽기 전용)</span>
-              </div>
+            ) : (
+              <button 
+                onClick={login}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+              >
+                <LogIn size={16} />
+                <span className="hidden sm:inline">로그인</span>
+              </button>
             )}
           </div>
         </div>
