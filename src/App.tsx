@@ -6,11 +6,12 @@ import CharacterList from './components/CharacterList';
 import ConfirmModal from './components/ConfirmModal';
 import ObjectSelector from './components/ObjectSelector';
 import { auth, db } from './firebase';
-import { LayoutDashboard, UserPlus, Users, Box, Share2, Check, LogIn, LogOut, Save, Copy } from 'lucide-react';
+import { LayoutDashboard, UserPlus, Users, Box, Share2, Check, LogIn, LogOut, Save, Copy, Trash2 } from 'lucide-react';
 import { 
   doc, 
   setDoc, 
-  getDoc
+  getDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 
@@ -32,6 +33,8 @@ export default function App() {
   
   const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
   const [newCustomId, setNewCustomId] = useState('');
+  const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
 
   const urlParams = new URLSearchParams(window.location.search);
   const shareId = urlParams.get('id');
@@ -228,6 +231,28 @@ export default function App() {
     }
   };
 
+  const deleteProject = async () => {
+    if (!user || !shareId || user.uid !== projectAuthorId) return;
+    setIsDeletingProject(true);
+    try {
+      await deleteDoc(doc(db, 'projects', shareId));
+      alert('데이터가 성공적으로 삭제되었습니다.');
+      // Remove ID from URL and reset state
+      const url = new URL(window.location.href);
+      url.searchParams.delete('id');
+      window.history.replaceState({}, '', url.toString());
+      setCharacters([]);
+      setSelectedObjects([]);
+      setProjectAuthorId(null);
+      setIsDeleteProjectModalOpen(false);
+    } catch (e) {
+      alert('삭제에 실패했습니다.');
+      console.error(e);
+    } finally {
+      setIsDeletingProject(false);
+    }
+  };
+
   const handleSave = (character: Character) => {
     if (isReadOnly) return;
     let order = character.order;
@@ -351,6 +376,15 @@ export default function App() {
                       <Copy size={16} />
                       <span className="hidden sm:inline">새 이름으로 저장</span>
                     </button>
+                    {shareId && projectAuthorId === user.uid && (
+                      <button 
+                        onClick={() => setIsDeleteProjectModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm bg-red-100 hover:bg-red-200 text-red-800 border border-red-200"
+                      >
+                        <Trash2 size={16} />
+                        <span className="hidden sm:inline">삭제</span>
+                      </button>
+                    )}
                     <button 
                       onClick={handleCopyLink}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all shadow-sm ${
@@ -495,6 +529,14 @@ export default function App() {
           setIsDeleteModalOpen(false);
           setCharacterToDelete(null);
         }}
+      />
+
+      <ConfirmModal 
+        isOpen={isDeleteProjectModalOpen}
+        title="프로젝트 삭제"
+        message={`'${shareId}' 프로젝트를 정말로 삭제하시겠습니까? (복구할 수 없습니다)`}
+        onConfirm={deleteProject}
+        onCancel={() => setIsDeleteProjectModalOpen(false)}
       />
 
       {isSaveAsModalOpen && (
