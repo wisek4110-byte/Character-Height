@@ -87,7 +87,18 @@ export default function App() {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  const login = () => signInWithPopup(auth, new GoogleAuthProvider());
+  const login = async () => {
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/requests-from-referer-are-blocked' || error.message.includes('auth/requests-from-referer')) {
+        alert('구글 클라우드 콘솔(Google Cloud Console)에서 API 키의 HTTP 리퍼러 제한에 현재 URL(*.run.app)을 추가하거나 제한을 해제해주세요.\n또한 파이어베이스(Firebase) 콘솔의 Authentication > 설정 > 승인된 도메인에 현재 URL을 추가해주세요.');
+      } else {
+        alert('로그인 중 오류가 발생했습니다: ' + error.message);
+      }
+    }
+  };
   const logout = () => signOut(auth);
 
   const saveToCloud = async () => {
