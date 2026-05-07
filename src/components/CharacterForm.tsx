@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Info } from 'lucide-react';
 import { Character } from '../types';
 import { getRandomColor } from '../utils';
+import AverageHeightModal from './AverageHeightModal';
 
 interface Props {
   onSave: (character: Character) => void;
@@ -10,6 +12,7 @@ interface Props {
 
 export default function CharacterForm({ onSave, editingCharacter, onCancel }: Props) {
   const [lastSeries, setLastSeries] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Character>>({
     name: '',
     height: 170,
@@ -92,124 +95,142 @@ export default function CharacterForm({ onSave, editingCharacter, onCancel }: Pr
   };
 
   return (
-    <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+    <>
+      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
+            <input 
+              type="text" 
+              name="name" 
+              value={formData.name} 
+              onChange={handleChange} 
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="예: 홍길동"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">소설/시리즈 (선택)</label>
+            <input 
+              type="text" 
+              name="series" 
+              value={formData.series || ''} 
+              onChange={handleChange} 
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="예: 해리포터"
+            />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+              키 (cm)
+              <button 
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="text-gray-400 hover:text-blue-600 transition-colors"
+                title="연령별 평균 키 정보"
+              >
+                <Info size={14} />
+              </button>
+            </label>
+            <input 
+              type="number" 
+              name="height" 
+              value={formData.height} 
+              onChange={handleChange} 
+              required
+              min="50"
+              max="300"
+              step="0.1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
+            <select 
+              name="gender" 
+              value={formData.gender} 
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="male">남성</option>
+              <option value="female">여성</option>
+            </select>
+          </div>
+        </div>
+        
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
-          <input 
-            type="text" 
-            name="name" 
-            value={formData.name} 
+          <label className="block text-sm font-medium text-gray-700 mb-1">키 묘사 / 설명</label>
+          <textarea 
+            name="description" 
+            value={formData.description} 
             onChange={handleChange} 
-            required
+            rows={3}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="예: 홍길동"
+            placeholder="예: 훤칠하고 다부진 체격. 문지방에 머리가 닿을 듯하다."
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">소설/시리즈 (선택)</label>
-          <input 
-            type="text" 
-            name="series" 
-            value={formData.series || ''} 
-            onChange={handleChange} 
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="예: 해리포터"
-          />
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">키 (cm)</label>
-          <input 
-            type="number" 
-            name="height" 
-            value={formData.height} 
-            onChange={handleChange} 
-            required
-            min="50"
-            max="300"
-            step="0.1"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
-          <select 
-            name="gender" 
-            value={formData.gender} 
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="male">남성</option>
-            <option value="female">여성</option>
-          </select>
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">키 묘사 / 설명</label>
-        <textarea 
-          name="description" 
-          value={formData.description} 
-          onChange={handleChange} 
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="예: 훤칠하고 다부진 체격. 문지방에 머리가 닿을 듯하다."
-        />
-      </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">노션 URL (선택)</label>
-        <input 
-          type="url" 
-          name="notionUrl" 
-          value={formData.notionUrl} 
-          onChange={handleChange} 
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="https://notion.so/..."
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">테마 색상</label>
-        <div className="flex items-center space-x-2">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">노션 URL (선택)</label>
           <input 
-            type="color" 
-            name="color" 
-            value={formData.color} 
+            type="url" 
+            name="notionUrl" 
+            value={formData.notionUrl} 
             onChange={handleChange} 
-            className="h-10 w-10 rounded cursor-pointer border-0 p-0"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="https://notion.so/..."
           />
-          <span className="text-sm text-gray-500 uppercase">{formData.color}</span>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">테마 색상</label>
+          <div className="flex items-center space-x-2">
+            <input 
+              type="color" 
+              name="color" 
+              value={formData.color} 
+              onChange={handleChange} 
+              className="h-10 w-10 rounded cursor-pointer border-0 p-0"
+            />
+            <span className="text-sm text-gray-500 uppercase">{formData.color}</span>
+            <button 
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, color: getRandomColor() }))}
+              className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition-colors"
+            >
+              랜덤
+            </button>
+          </div>
+        </div>
+
+        <div className="flex space-x-2 pt-2">
           <button 
-            type="button"
-            onClick={() => setFormData(prev => ({ ...prev, color: getRandomColor() }))}
-            className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition-colors"
+            type="submit" 
+            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
           >
-            랜덤
+            {editingCharacter ? '수정 완료' : '추가하기'}
           </button>
+          {editingCharacter && (
+            <button 
+              type="button" 
+              onClick={onCancel}
+              className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors font-medium"
+            >
+              취소
+            </button>
+          )}
         </div>
-      </div>
+      </form>
 
-      <div className="flex space-x-2 pt-2">
-        <button 
-          type="submit" 
-          className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
-        >
-          {editingCharacter ? '수정 완료' : '추가하기'}
-        </button>
-        {editingCharacter && (
-          <button 
-            type="button" 
-            onClick={onCancel}
-            className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors font-medium"
-          >
-            취소
-          </button>
-        )}
-      </div>
-    </form>
+      <AverageHeightModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSelect={onSave}
+      />
+    </>
   );
 }
